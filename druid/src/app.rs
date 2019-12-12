@@ -46,6 +46,10 @@ pub struct WindowDesc<T> {
     pub(crate) title: Option<LocalizedString<T>>,
     pub(crate) size: Option<Size>,
     pub(crate) menu: Option<MenuDesc<T>>,
+    /// Should be `true` if this window exists when the app is launched.
+    ///
+    /// This is not set directly; the framework sets it during launch.
+    pub(crate) is_initial_window: bool,
     /// The `WindowId` that will be assigned to this window.
     ///
     /// This can be used to track a window from when it is launched and when
@@ -102,7 +106,8 @@ impl<T: Data + 'static> AppLauncher<T> {
 
         let state = AppState::new(data, env, self.delegate.take());
 
-        for desc in self.windows {
+        for mut desc in self.windows {
+            desc.is_initial_window = true;
             let window = desc.build_native(&state)?;
             window.show();
         }
@@ -133,6 +138,7 @@ impl<T: Data + 'static> WindowDesc<T> {
             size: None,
             menu: MenuDesc::platform_default(),
             id: WindowId::next(),
+            is_initial_window: false,
         }
     }
 
@@ -184,9 +190,8 @@ impl<T: Data + 'static> WindowDesc<T> {
         }
 
         let root = (self.root_builder)();
-        state
-            .borrow_mut()
-            .add_window(self.id, Window::new(root, title, menu));
+        let window = Window::new(root, title, menu, self.is_initial_window);
+        state.borrow_mut().add_window(self.id, window);
 
         builder.build()
     }

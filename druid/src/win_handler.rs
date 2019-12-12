@@ -33,8 +33,8 @@ use crate::menu::ContextMenu;
 use crate::theme;
 use crate::window::Window;
 use crate::{
-    BaseState, Command, Data, Env, Event, EventCtx, KeyEvent, KeyModifiers, LayoutCtx, MenuDesc,
-    PaintCtx, TimerToken, UpdateCtx, WheelEvent, WindowDesc, WindowId,
+    BaseState, Command, Data, Env, Event, EventCtx, KeyEvent, KeyModifiers, LayoutCtx, LifeCycle,
+    MenuDesc, PaintCtx, TimerToken, UpdateCtx, WheelEvent, WindowDesc, WindowId,
 };
 
 use crate::command::sys as sys_cmd;
@@ -297,6 +297,14 @@ impl<T: Data + 'static> AppState<T> {
             env,
             windows: Windows::default(),
         }))
+    }
+
+    fn take_needs_launch(&mut self, id: WindowId) -> bool {
+        self.windows
+            .windows
+            .get_mut(&id)
+            .map(Window::take_needs_did_launch)
+            .unwrap_or(false)
     }
 
     fn get_menu_cmd(&self, window_id: WindowId, cmd_id: u32) -> Option<Command> {
@@ -617,9 +625,25 @@ impl<T: Data + 'static> DruidHandler<T> {
 
 impl<T: Data + 'static> WinHandler for DruidHandler<T> {
     fn connect(&mut self, handle: &WindowHandle) {
+        //NOTE: this method predates `connected`, and we call delegate methods here.
+        //it's possible that we should move those calls to occur in connected?
         self.app_state
             .borrow_mut()
             .connect(self.window_id, handle.clone());
+    }
+
+    fn connected(&mut self, ctx: &mut dyn WinCtx) {
+        let needs_did_launch = self
+            .app_state
+            .borrow_mut()
+            .take_needs_launch(self.window_id);
+        if needs_did_launch {
+            let event = Event::LifeCycle(LifeCycle::ApplicationStarted);
+            self.do_event(event, ctx);
+        }
+
+        let event = Event::LifeCycle(LifeCycle::WindowConnected);
+        self.do_event(event, ctx);
     }
 
     fn paint(&mut self, piet: &mut Piet, ctx: &mut dyn WinCtx) -> bool {

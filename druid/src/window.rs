@@ -37,6 +37,9 @@ pub struct Window<T: Data> {
     size: Size,
     pub(crate) menu: Option<MenuDesc<T>>,
     pub(crate) context_menu: Option<MenuDesc<T>>,
+    /// a bool indicating whether this window should receive the ApplicationStarted
+    /// event; only true if it is created when the application is.
+    needs_did_launch: bool,
     // delegate?
 }
 
@@ -45,6 +48,7 @@ impl<T: Data> Window<T> {
         root: impl Widget<T> + 'static,
         title: LocalizedString<T>,
         menu: Option<MenuDesc<T>>,
+        needs_did_launch: bool,
     ) -> Window<T> {
         Window {
             root: WidgetPod::new(Box::new(root)),
@@ -52,7 +56,14 @@ impl<T: Data> Window<T> {
             title,
             menu,
             context_menu: None,
+            needs_did_launch,
         }
+    }
+
+    pub(crate) fn take_needs_did_launch(&mut self) -> bool {
+        let result = self.needs_did_launch;
+        self.needs_did_launch = false;
+        result
     }
 
     pub fn event(&mut self, ctx: &mut EventCtx, event: &Event, data: &mut T, env: &Env) {
