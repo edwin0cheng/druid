@@ -46,6 +46,7 @@ use direct2d::render_target::{GenericRenderTarget, HwndRenderTarget, RenderTarge
 use crate::kurbo::{Point, Size, Vec2};
 use crate::piet::{Piet, RenderContext};
 
+use super::accels::register_accel;
 use super::dcomp::{D3D11Device, DCompositionDevice, DCompositionTarget, DCompositionVisual};
 use super::dialog::get_file_dialog_path;
 use super::error::Error;
@@ -850,9 +851,12 @@ impl WindowBuilder {
             let width = (self.size.width * (f64::from(dpi) / 96.0)) as i32;
             let height = (self.size.height * (f64::from(dpi) / 96.0)) as i32;
 
-            let hmenu = match self.menu {
-                Some(menu) => menu.into_hmenu(),
-                None => 0 as HMENU,
+            let (hmenu, accels) = match self.menu {
+                Some(menu) => {
+                    let accels = menu.accels();
+                    (menu.into_hmenu(), accels)
+                }
+                None => (0 as HMENU, None),
             };
             let mut dwExStyle = 0;
             if self.present_strategy == PresentStrategy::Flip {
@@ -874,6 +878,10 @@ impl WindowBuilder {
             );
             if hwnd.is_null() {
                 return Err(Error::NullHwnd);
+            }
+
+            if let Some(accels) = accels {
+                register_accel(hwnd, &accels);
             }
 
             let dcomp_state = create_dcomp_state(self.present_strategy, hwnd).unwrap_or_else(|e| {
@@ -1144,6 +1152,7 @@ impl WindowHandle {
     }
 
     pub fn set_menu(&self, menu: Menu) {
+        let accels = menu.accels();
         let hmenu = menu.into_hmenu();
         if let Some(w) = self.state.upgrade() {
             let hwnd = w.hwnd.get();
@@ -1153,6 +1162,9 @@ impl WindowHandle {
                     warn!("failed to set window menu");
                 } else {
                     DestroyMenu(old_menu);
+                }
+                if let Some(accels) = accels {
+                    register_accel(hwnd, &accels);
                 }
             }
         }
